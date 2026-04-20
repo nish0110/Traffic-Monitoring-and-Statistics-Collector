@@ -1,6 +1,4 @@
-Here is a **complete clean README you can copy-paste directly into GitHub**.
 
-```markdown
 # SDN Traffic Monitoring using POX and Mininet
 
 Software Defined Networking project demonstrating real-time traffic monitoring using the POX controller and Mininet emulator.
