@@ -1,32 +1,50 @@
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
-from pox.lib.util import dpidToStr
 from pox.lib.recoco import Timer
+from pox.lib.packet.ipv4 import ipv4
 
 log = core.getLogger()
 
-class TrafficMonitor(object):
+# Dictionary to store traffic stats
+traffic_stats = {}
 
-    def __init__(self):
-        core.openflow.addListeners(self)
-        Timer(10, self.request_stats, recurring=True)
+def _handle_PacketIn(event):
+    packet = event.parsed
 
-    def _handle_ConnectionUp(self, event):
-        log.info("Switch %s connected", dpidToStr(event.dpid))
+    if not packet.parsed:
+        return
 
-    def request_stats(self):
-        for connection in core.openflow._connections.values():
-            connection.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
+    ip_packet = packet.find('ipv4')
 
-    def _handle_FlowStatsReceived(self, event):
+    if ip_packet:
+        src = ip_packet.srcip
+        dst = ip_packet.dstip
+        key = (src, dst)
 
-        log.info("Flow stats from switch %s", dpidToStr(event.connection.dpid))
+        length = len(packet)
 
-        for stat in event.stats:
-            log.info("Match: %s  Packets: %s  Bytes: %s",
-                     stat.match,
-                     stat.packet_count,
-                     stat.byte_count)
+        if key not in traffic_stats:
+            traffic_stats[key] = {"packets":0, "bytes":0}
+
+        traffic_stats[key]["packets"] += 1
+        traffic_stats[key]["bytes"] += length
+
+
+def print_stats():
+    print("\n================ TRAFFIC STATISTICS ================")
+    print("SRC IP\t\tDST IP\t\tPACKETS\t\tBYTES")
+
+    for (src, dst), stats in traffic_stats.items():
+        print(f"{src}\t{dst}\t{stats['packets']}\t\t{stats['bytes']}")
+
+    print("====================================================\n")
+
 
 def launch():
-    core.registerNew(TrafficMonitor)
+
+    log.info("Traffic Monitoring Module Loaded")
+
+    core.openflow.addListenerByName("PacketIn", _handle_PacketIn)
+
+    # Print stats every 5 seconds
+    Timer(5, print_stats, recurring=True)
